@@ -6,11 +6,8 @@ Description: Data and files for an interrupted time series analysis of reports o
 GENERAL INFORMATION
 
 1. Title: Data from: Somewhere to go: Assessing the impact of public restroom interventions on reports of open defecation in San Francisco, California from 2014 to 2020
-2. Author Information:
-	A. Corresponding author contact info
-		Name: Heather K. Amato
-		Institution: Environmental Health Sciences, 
-		Email: heather_amato@berkeley.edu
+
+2. Author Information: Heather K. Amato, Environmental Health Sciences, UC Berkeley School of Public Health, heather_amato@berkeley.edu
 		
 3. Research Domains: environmental health, WASH
 
