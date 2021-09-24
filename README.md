@@ -38,9 +38,10 @@ Data from: Somewhere to go: Assessing the impact of public restroom intervention
 DATA & FILE OVERVIEW
 
 1. Data: Data on Pit Stop restrooms were obtained from the SF Department of Public Works. Data on 311 calls (i.e. feces reports) are publicly available here: https://datasf.org/opendata/
+	
 	A. weekly_calls.csv - this is a processed dataset ready for analysis, including the number of 311 calls (i.e. feces reports) within a 500 meter walking distance of each 
-  Pit Stop intervention in each week during a six month pre-intervention period and a six month post-intervention period. This dataset was produced in the RMD file
-  'SF_PitStop_PrepData.Rmd', and is used to conduct the final analysis in 'SF_PitStop_ITSAnalysis.Rmd'.
+  	Pit Stop intervention in each week during a six month pre-intervention period and a six month post-intervention period. This dataset was produced in the RMD file
+  	'SF_PitStop_PrepData.Rmd', and is used to conduct the final analysis in 'SF_PitStop_ITSAnalysis.Rmd'.
 	
 	B. all311calls_filtered.csv - this is a processed dataset containing all 311 calls containing reports of exposed feces. This dataset is necessary for prepping the 
 	weekly_calls.csv dataset using code in 'SF_PitStop_PrepData.Rmd'.
