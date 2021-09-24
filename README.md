@@ -13,7 +13,7 @@ GENERAL INFORMATION
 
 4. Keywords: open defecation, environmental contamination, sanitation, San Francisco, public toilets, homelessness
 
-5. Date of data collection (single date, range, approximate date): January 2014 - January 2020 
+5. Date of data collection: January 2014 - January 2020 
 
 6. Geographic location of data collection: 10 neighborhoods of San Francisco, California
 
