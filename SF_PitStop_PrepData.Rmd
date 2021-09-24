@@ -1,0 +1,161 @@
+---
+title: "SF Pit Stop Data Processing"
+author: "Heather Amato"
+date: "9/24/2021"
+output: html_document
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+
+library(sf)
+library(lubridate)
+library(ggspatial)
+library(mapview)
+```
+
+**Objective:** Process and link 311 call data (i.e. feces reports), Pit Stop restroom intervention data, and walking distance buffers around Pit Stop restroom locations (generated in ArcGIS Online) to obtain the weekly number of feces reports near each Pit Stop intervention during the six months pre- and six months post-intervention implementation. The output dataset will be used to conduct an interrupted time series analysis. We included walking distance buffers of 0.1 km, 0.322 km, and 0.5 km, though only buffers of 0.5 km (500 meters) are used in the final analysis.
+
+## I. Prep spatial data
+
+```{r map, echo=FALSE, eval=FALSE}
+allcalls <- read.csv("C:/Users/heather_amato/Desktop/Graham Lab Group/SF 311 Study/all311calls_filtered.csv",
+                              colClasses = c("character","character","Date","Date","character","character","character","character",
+                                             "character","character","character","character","character","character","character",
+                                             "numeric","numeric","character","character","character")) %>% 
+  mutate(Date.Opened = as_date(mdy_hm(Opened))) %>% # convert date from character to date format (and remove time of day)
+  dplyr::select(CaseID, Date.Opened, Longitude, Latitude) %>% 
+  filter(Latitude != 0)
+
+# Convert data frame to sf object
+points <- st_as_sf(x = allcalls, 
+                   coords = c("Longitude", "Latitude"))
+
+# walking distance buffers for 0.1km, 0.322km, and 0.5km were created in arcgis online using pitstopcoordinates.csv files
+# buffer layers were exported as shapefiles & downloaded as zipped shapefiles then unzipped
+# read shapefiles (.shp files must be in same file location as other zipped files - .dbf, .cpg, .prj, .shx)
+buffers <- rbind(st_read("C:/Users/heather_amato/Desktop/Graham Lab Group/SF 311 Study/walking_distance_buffers/buffer_0_1km.shp"),
+                 st_read("C:/Users/heather_amato/Desktop/Graham Lab Group/SF 311 Study/walking_distance_buffers/buffer_0_322km.shp"),
+                 st_read("C:/Users/heather_amato/Desktop/Graham Lab Group/SF 311 Study/walking_distance_buffers/buffer_0_5km.shp")) %>% 
+  dplyr::select(site, distance.km=ToBreak, Longitude,Latitude,geometry)
+
+# set coordinate ref system
+st_crs(buffers)  # check buffers crs
+points <- st_set_crs(points,"WGS84")
+#st_crs(points)
+points <- st_transform(points, crs = st_crs(buffers)) # set points crs
+#st_crs(points)
+
+# check map to make sure points and buffers are all in SF
+mapview(list(buffers,head(points,100)))
+
+```
+
+## II. Prep Pit Stop intervention data
+
+```{r weekly.counts, echo=FALSE, eval=FALSE}
+dat <- read.csv("C:/Users/heather_amato/Desktop/Graham Lab Group/SF 311 Study/Pit_Stops_Dates.csv") %>%
+  filter(!is.na(id))
+
+# get unique list of pit stops w/start dates
+df2 <- dat %>% 
+  dplyr::select(id, site, neighborhood, start.date, pitstop.type, intervention.type) %>% 
+  filter(id !=is.na(id)) %>% 
+  unique()
+
+# fix start date for sites 8 and 9
+df2$start.date[df2$id == 8 | df2$id == 9] <- "7/1/2015"
+
+# create new site id (old id is intervention id, specific to intervention type AND site)
+df2$site.id <- df2$id
+
+# change site ids for repeat interventions at certain sites (so there's a single unique id for each site)
+df2$site.id[df2$id == 23] <- 5
+df2$site.id[df2$id == 29] <- 12
+df2$site.id[df2$id == 30] <- 20
+df2$site.id[df2$id == 31] <- 4
+
+# calculate start and end dates for 6 months before and after intervention start date
+df2 <- df2 %>% mutate(pre.start = mdy(start.date) %m-% months(6),
+                      post.start = mdy(start.date) %m+% months(6))
+
+# add a row for every week between pre and post 6 months of start date for each site/intervention (by id)
+library(data.table)
+df.expanded <- setDT(df2)[ , list(id = id, week.start = seq(pre.start, post.start, by = "week")), by = 1:nrow(df2)]
+df.expanded <- df.expanded %>% mutate(week.end = week.start %m+% weeks(1))
+df.expanded <- full_join(df.expanded, df2, by = "id")  # join back to rest of data
+
+# add appropriate ids to buffer (won't match on site name because names are different in two files)
+site.id <- rep(c(12, 6, 22,28,26,7,11,10,13,5,14,8,15,27,1,2,18,9,21,20,3,16,19,4,17,24,25),3)
+buffers$site.id <- site.id
+```
+
+## III. Spatially & temporally match walking distance buffers around Pit Stop interventions with 311 call data 
+
+```{r spatial.join, echo=FALSE}
+# merge id, type, neighborhood w/buffer data
+buffers <- full_join(df.expanded, buffers, by="site.id")
+
+# make sure points and buffers are right file format for st_intersection
+a <- st_as_sf(points)
+b <- st_as_sf(buffers)
+rm(points,buffers,allcalls)
+
+memory.limit(26000)
+
+# intersect points and buffers
+test <- (st_intersection(a, b))
+
+# select out only intersections that also match by date
+test <- test %>% 
+  mutate(date.match = if_else(Date.Opened >= week.start & Date.Opened <= week.end, 1, 0)) %>% 
+  filter(date.match == 1)
+
+# summarise weekly counts
+weekly.counts <- test %>% 
+  group_by(id, site.id, neighborhood, pitstop.type, intervention.type, 
+           start.date, week.start, distance.km) %>% 
+  summarise(count = n()) 
+
+# expand out dataset with all weekly dates so each date has a row for each buffer
+df1 <- df.expanded %>% mutate(distance.km = 0.1)
+df2 <- df.expanded %>% mutate(distance.km = 0.322)
+df3 <- df.expanded %>% mutate(distance.km = 0.5)
+df.expanded2 <- rbind(df1, df2, df3) 
+# join back with full list of weekly dates 
+weekly.counts.all <- full_join(weekly.counts, df.expanded2)
+
+# check that each site has 53 weekly counts for each buffer distance
+table(weekly.counts.all$id,weekly.counts.all$distance.km)
+
+# change NAs to zeros for counts
+weekly.counts.all$count[is.na(weekly.counts.all$count)] <- 0
+
+# create intervention & time variables for ITS model
+weekly.counts.all2 <- weekly.counts.all %>% ungroup() %>% 
+  mutate(start.date = mdy(start.date),
+    intervention = if_else(week.start < start.date, 0, 1))  %>% 
+  arrange(distance.km, id, week.start) %>%
+  group_by(distance.km, id) %>% 
+  mutate(time = row_number()) %>% 
+  dplyr::select(-nrow)
+
+# fix mission neighborhood name
+weekly.counts.all2$neighborhood[weekly.counts.all2$neighborhood=="Mission "] <- "Mission"
+weekly.counts.all2$neighborhood[weekly.counts.all2$neighborhood==" Mission "] <- "Mission"
+
+#table(weekly.counts.all2$intervention,weekly.counts.all2$time,weekly.counts.all2$distance.km)
+
+# change dat back from spatial data to dataframe
+dat <- st_set_geometry(weekly.counts.all2, NULL) %>% ungroup() %>% 
+  mutate(month = factor(month(week.start))) # create month var to adjust for seasonal trends
+
+# remove observations for week 27 (when intervention was implemented - some sites had intervention during week 27 and some sites didn't)
+dat <- filter(dat, time != 27)
+
+# check mean calls by site
+# dat %>% group_by(neighborhood, site,intervention.type) %>%
+#  summarise(mean = mean(count)) %>%
+#  kable()
+# write.csv(dat, "C:/Users/heather_amato/Desktop/Graham Lab Group/SF 311 Study/weekly_calls.csv")
+```

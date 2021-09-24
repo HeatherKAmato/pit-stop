@@ -1,0 +1,1243 @@
+---
+title: "SF 311 Calls Before and After Installation of Pit-Stop Restrooms"
+subtitle: "An Interrupted Time Series Analysis"
+geometry: left=.5in,right=.5in,top=1in,bottom=1in
+header-includes: 
+  \usepackage{fancyhdr} 
+  \usepackage{booktabs} 
+  \usepackage{longtable}
+  \usepackage{array} 
+  \usepackage{multirow} 
+  \usepackage{wrapfig} 
+  \usepackage{float}
+  \usepackage{colortbl}
+  \usepackage{pdflscape} 
+  \usepackage{tabu} 
+  \usepackage{threeparttable}
+  \usepackage{threeparttablex} 
+  \usepackage[normalem]{ulem} 
+  \usepackage{makecell}
+output:
+  pdf_document:
+    latex_engine: pdflatex
+    md_extensions: +inline_notes
+    number_sections: no
+  html_document:
+    df_print: paged
+  word_document: default
+fontsize: 11pt
+---
+\pagestyle{fancyplain}
+\rhead{Heather Amato}
+\lhead{11/22/2020}
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = FALSE, message = FALSE, warning = FALSE)
+library(ggplot2)
+library(Rmisc)
+library(tidyverse)
+library(kableExtra)
+```
+# Overview
+Several temporary public restrooms have been installed and/or given additional staffing throughout San Francisco to improve access to toilets and reduce open defecation. Here, we use an **interrupted time series (ITS) approach** to test the null hypothesis that pit-stop installations had no impact on the rate of reports per week of the presence of feces near the pit-stop locations. Reports of feces are measured by 311 calls, which have geographic coordinate data indicating the location of feces. We use walking buffer distances around each intervention site to identify reports of feces near each site. Using negative binomial regression models, we estimate **slope changes** as our effect estimates, where the slope change is the difference in the rate of 311 calls per week in the 6 months post-intervention and the rate of 311 calls per week in the 6 months pre-intervention. 
+
+
+# Interrupted Time Series (ITS) Analysis 
+
+This approach is similar to the Differences-in-Differences approach in that it uses a regression model with an interaction term. However, instead of using a control group or expected value as a comparison, the pre-intervention values for each site serve as that site's own comparison group. In other words, we're comparing the trend in 311 calls based on observations at multiple time points *prior* to the intervention at a given site (i.e., the expected change over time), to the trend in 311 calls based on observations at multiple time points *after* the intervention begins at that site (i.e., the observed change over time).  
+
+Because our interventions begin at different time points (i.e., 'multiple baseline design'), we do not need a control group to compare to (see Bernal, Cummins, and Gaasparrini 2017). We will utilize weekly observations of the number of 311 calls within a 500 meter walking distance buffer for each site, starting 6 months before the intervention began until 6 months after the intervention began. This yields 52 total observations per site (26 weeks before and 26 weeks after). (Week 27 will be excluded as a 'wash' period.)
+
+
+## I. Explore distribution of weekly 311 calls
+
+**Table 1.** Summary statistics of 311 calls per week by buffer distance before and after the installation of a new pit-stop restroom.  
+
+```{r summary, echo=FALSE}
+dat <- read.csv("C:/Users/heather_amato/Desktop/Graham Lab Group/SF 311 Study/weekly_calls.csv")
+
+dat$neighborhood <- trimws(dat$neighborhood)
+dat$site <- trimws(dat$site)
+# shows potential for overdispersion based on the high mean value of 17.5 (when we know we have a lot of zeros)
+data.frame(cbind(c("0.1 km", "0.322 km", "0.5 km"),
+      rbind(summary(dat$count[dat$distance.km==0.1 & dat$time <=26 & dat$time >= 23 & dat$intervention.type=="New Restroom Installed"]),
+             summary(dat$count[dat$distance.km==0.322 & dat$time <=26 & dat$time >= 23 & dat$intervention.type=="New Restroom Installed"]),
+             summary(dat$count[dat$distance.km==0.5 & dat$time <=26 & dat$time >= 23 & dat$intervention.type=="New Restroom Installed"])), 
+      rbind(summary(dat$count[dat$distance.km==0.1 & dat$time <=31 & dat$time >= 28 & dat$intervention.type=="New Restroom Installed"]),
+             summary(dat$count[dat$distance.km==0.322 & dat$time <=31 & dat$time >= 28 & dat$intervention.type=="New Restroom Installed"]),
+             summary(dat$count[dat$distance.km==0.5 & dat$time <=31 & dat$time >= 28 & dat$intervention.type=="New Restroom Installed"])),
+      rbind(summary(dat$count[dat$distance.km==0.1 & dat$intervention == 0 & dat$intervention.type=="New Restroom Installed"]),
+             summary(dat$count[dat$distance.km==0.322 & dat$intervention == 0 & dat$intervention.type=="New Restroom Installed"]),
+             summary(dat$count[dat$distance.km==0.5 & dat$intervention == 0 & dat$intervention.type=="New Restroom Installed"])), 
+      rbind(summary(dat$count[dat$distance.km==0.1 & dat$intervention == 1 & dat$intervention.type=="New Restroom Installed"]),
+             summary(dat$count[dat$distance.km==0.322 & dat$intervention == 1 & dat$intervention.type=="New Restroom Installed"]),
+             summary(dat$count[dat$distance.km==0.5 & dat$intervention == 1 & dat$intervention.type=="New Restroom Installed"]))
+             )) %>% 
+  mutate(Mean = round(as.numeric(Mean), 3), 
+         Mean.1 = round(as.numeric(Mean.1), 3),
+         Mean.2 = round(as.numeric(Mean.2), 3),
+         Mean.3 = round(as.numeric(Mean.3), 3)) %>% 
+  dplyr::select(-X1st.Qu., -X3rd.Qu., -X1st.Qu..1, -X3rd.Qu..1, -X1st.Qu..2, -X3rd.Qu..2, -X1st.Qu..3, -X3rd.Qu..3) 
+```
+
+```{r recode, echo=FALSE}
+# reorganize neighborhoods to match SF DPH Analysis Neighborhoods
+dat$neighborhood[dat$neighborhood=="Lower Polk"] <- "Tenderloin"
+dat$neighborhood[dat$neighborhood=="Haight"] <- "Haight Ashbury"
+dat$neighborhood[dat$neighborhood=="Civic Center"] <- "Tenderloin"
+dat$neighborhood[dat$neighborhood=="Mid-Market"] <- "Tenderloin"
+dat$neighborhood[dat$neighborhood=="Ocean Beach"] <- "Golden Gate Park"
+dat$neighborhood[dat$site=="Stanyan and Waller streets"] <- "Golden Gate Park"
+dat$neighborhood[dat$neighborhood == "Castro"] <- "Castro/Upper Market"
+dat$neighborhood[dat$site=="McCoppin Hub  McCoppin St and Valencia"] <- "Mission"
+dat$neighborhood[dat$neighborhood == "The Embarcadero"] <- "Financial District/South Beach"
+dat$neighborhood[dat$neighborhood == "Bayview"] <- "Bayview Hunters Point"
+dat$neighborhood[dat$neighborhood == "Outer Sunset"] <- "Sunset/Parkside"
+
+unique(dat$neighborhood)
+
+# create season variable to control for seasonal trends while stratifying by neighborhood 
+dat <- dat %>% mutate(season = case_when(month == 12 | month == 1 | month == 2 ~ "winter",
+                                           month == 9 | month == 10 | month == 11 ~ "fall",
+                                           month == 6 | month == 7 | month == 8 ~ "summer",
+                                           month == 3 | month == 4 | month == 5 ~ "spring"))
+
+# change vars to factor
+dat$intervention <- factor(dat$intervention, levels=c(0,1))
+dat$distance.km <- factor(dat$distance.km)
+
+# create table
+# overall
+group_by(dat, intervention) %>% 
+  filter(distance.km == 0.5) %>% 
+  summarise(
+    n = n(),
+    mean = mean(count, na.rm=T),
+    sd = sd(count, na.rm=T)
+  )
+
+# intervention type
+group_by(dat, intervention, intervention.type) %>% 
+  filter(distance.km == 0.5) %>% 
+  summarise(
+    n = n(),
+    mean = mean(count, na.rm=T),
+    sd = sd(count, na.rm=T)
+  )
+
+# neighborhood
+group_by(dat, intervention, neighborhood) %>% 
+  filter(distance.km == 0.5) %>% 
+  summarise(
+    n = n(),
+    mean = mean(count, na.rm=T),
+    sd = sd(count, na.rm=T)
+  )
+
+# descriptive table
+dat %>% 
+  distinct(neighborhood, id, site, intervention.type, pitstop.type, start.date) %>% 
+  arrange(neighborhood, site) %>% 
+  kable()
+
+```
+
+**Figure 1.** Distribution of 311 calls per week for sites where a new restroom was installed.  
+
+```{r hist2, echo=FALSE}
+# change vars to factor
+dat$intervention <- factor(dat$intervention, levels=c(0,1))
+dat$distance.km <- factor(dat$distance.km)
+
+# group mean of weekly counts
+mu1 <- ddply(dat, c("intervention.type","intervention"), summarise, grp.mean=mean(count))
+mu2 <- ddply(dat, c("neighborhood","intervention"), summarise, grp.mean=mean(count))
+# histogram by type
+hist.plot1 <- dat %>% 
+  ggplot(aes(x = count, color=intervention, fill=intervention)) +
+  geom_histogram(alpha=0.4, position="identity") +
+  geom_vline(data = mu1, aes(xintercept=grp.mean, color=intervention),
+             linetype = "dashed") +
+  labs(x="number of reports of feces per week") +
+  facet_wrap(~intervention.type, ncol=1, scales="free_y") +
+  theme_minimal()
+
+hist.plot1
+# histogram by neighborhood
+hist.plot2 <- dat %>% 
+  ggplot(aes(x = count, color=intervention, fill=intervention)) +
+  geom_histogram(alpha=0.4, position="identity") +
+  geom_vline(data = mu2, aes(xintercept=grp.mean, color=intervention),
+             linetype = "dashed") +
+  labs(x="number of reports of feces per week") +
+  facet_wrap(~neighborhood, ncol=3, scales="free") +
+  theme_minimal()
+
+hist.plot2
+```
+Histogram of weekly number of reports of feces with 500 meters of each Pit Stop location by intervention status (0=pre, 1=post). Vertical dashed lines indicate grouped mean.  
+
+\newpage
+
+**Figure 2.** Boxplots of 311 calls per week by neighborhood for sites where a new restroom was installed (buffer = 0.5 km).  
+
+```{r boxplots, echo=FALSE}
+dat$site.id <- as.factor(dat$site.id)
+
+#stratify by buffer distance
+dat1 <- filter(dat, distance.km == 0.1) %>%
+  dplyr::select(id, site.id, site, intervention.type, month, neighborhood, time, intervention, count)
+dat2 <- filter(dat, distance.km == 0.322)%>% 
+  dplyr::select(id, site.id, site, intervention.type, month, neighborhood, time, intervention,  count)
+dat3 <- filter(dat, distance.km == 0.5)%>% 
+  dplyr::select(id, site.id, site,intervention.type, month, neighborhood, time, intervention, count)
+
+site.lab <- unique(paste(dat$id,dat$site, sep=" - ")) # create label for sites (id + name)
+# boxplots
+box1 <- dat3 %>% 
+    filter(intervention.type=="New Restroom Installed") %>% #only plot for intervention=new restroom installed
+  ggplot(aes(x=site.id, y=count, color=intervention)) +
+  geom_boxplot(aes(fill=intervention), alpha=0.4) +
+  theme_minimal() +
+  facet_wrap(vars(neighborhood, intervention.type), scales="free") +
+  labs(y="311 calls", x="Site") 
+
+box2 <- dat3 %>% 
+    filter(intervention.type=="Existing Restroom, Unstaffed -> Staffed") %>% #only plot for intervention=new restroom installed
+  ggplot(aes(x=site.id, y=count, color=intervention)) +
+  geom_boxplot(aes(fill=intervention), alpha=0.4) +
+  theme_minimal() +
+  facet_wrap(vars(neighborhood, intervention.type), scales="free") +
+  labs(y="311 calls", x="Site")+
+  theme(legend.position = "none")
+
+box3 <- dat3 %>% 
+    filter(intervention.type=="Existing Staffed Restroom, Daytime Only -> 24/7") %>% #only plot for intervention=new restroom installed
+  ggplot(aes(x=site.id, y=count, color=intervention)) +
+  geom_boxplot(aes(fill=intervention), alpha=0.4) +
+  theme_minimal() +
+  facet_wrap(vars(neighborhood, intervention.type), scales="free") +
+  labs(y="311 calls", x="Site")+
+  theme( legend.position = "none")
+
+# ggarrange(box1, box2, box3,
+#           labels = c("A","B","C"),
+#           nrow = 3)
+
+box1
+```
+
+*Note:* y-axis changes for each plot. Numbers along x-axis indicate the id for each site. Red boxes are the distribution of 311 calls in the 6 months pre-intervention (intervention=0), blue are for 6 months post-intervention (intervention=1).  
+
+\newpage
+
+## II. Permutation tests to compare means
+
+**Overall:**
+```{r}
+dat <- filter(dat, distance.km == 0.5)
+num_perm <- 10000
+X_sample <- dat$count[dat$intervention==1]
+Y_sample <- dat$count[dat$intervention==0]
+n1 <- length(X_sample)
+n2 <- length(Y_sample)
+obs_test_stat <- (mean(X_sample)- mean(Y_sample))
+
+perm_test_stats <- lapply(seq_len(num_perm),function(B) {
+  # combine samples and get permutations by shuffling indices
+  combined_observations <-c(X_sample, Y_sample)
+  X_indices <-sample(1:(n1+n2), n1)
+  # create new, permutated data sets
+  permuted_X <- combined_observations[X_indices]
+  permuted_Y <- combined_observations[-X_indices]
+  # calculate the difference in means for this permutation
+  perm_test_stat <-mean(permuted_X)- mean(permuted_Y)
+  return(perm_test_stat)
+  })
+
+perm_test_stats <-do.call(c, perm_test_stats)
+
+# plot results
+p_perm <- enframe(perm_test_stats, name = NULL) %>%
+  ggplot(aes(x = value)) + 
+  geom_histogram(fill = "blue", alpha = 0.5) +
+  geom_vline(xintercept = obs_test_stat, colour = "red", linetype = "dashed") +
+  labs(x = "Test statistic", y = "",
+       title = "Permutation Distribution of Test Statistics",
+       subtitle = "(red line indicates the observed test statistic)") +
+  theme_minimal()
+#p_perm
+
+# estimate p-value
+library(perm)
+permTS <- permTS(x = X_sample,
+                y = Y_sample,
+                alternative = "two.sided",
+                method = "exact.mc",
+                control = permControl(nmc = num_perm))
+c(round(c(mean(Y_sample), mean(X_sample), obs_test_stat), 2), round(permTS$p.value, 4))
+```
+  
+**By intervention type:**
+a. New Restroom Installed
+```{r}
+num_perm <- 10000
+X_sample <- dat$count[dat$intervention==1 & dat$intervention.type == "New Restroom Installed"]
+Y_sample <- dat$count[dat$intervention==0 & dat$intervention.type == "New Restroom Installed"]
+n1 <- length(X_sample)
+n2 <- length(Y_sample)
+obs_test_stat2 <- (mean(X_sample)- mean(Y_sample))
+
+perm_test_stats <- lapply(seq_len(num_perm),function(B) {
+  # combine samples and get permutations by shuffling indices
+  combined_observations <-c(X_sample, Y_sample)
+  X_indices <-sample(1:(n1+n2), n1)
+  # create new, permutated data sets
+  permuted_X <- combined_observations[X_indices]
+  permuted_Y <- combined_observations[-X_indices]
+  # calculate the difference in means for this permutation
+  perm_test_stat <-mean(permuted_X)- mean(permuted_Y)
+  return(perm_test_stat)
+  })
+
+perm_test_stats <-do.call(c, perm_test_stats)
+
+# plot results
+p_perm2 <- enframe(perm_test_stats, name = NULL) %>%
+  ggplot(aes(x = value)) + 
+  geom_histogram(fill = "blue", alpha = 0.5) +
+  geom_vline(xintercept = obs_test_stat2, colour = "red", linetype = "dashed") +
+  labs(x = "Test statistic", y = "",
+       title = "Permutation Distribution of Test Statistics",
+       subtitle = "(red line indicates the observed test statistic)") +
+  theme_minimal()
+#p_perm2
+
+# estimate p-value
+library(perm)
+permTS2 <- permTS(x = X_sample,
+                y = Y_sample,
+                alternative = "two.sided",
+                method = "exact.mc",
+                control = permControl(nmc = num_perm))
+c(round(c(mean(Y_sample), mean(X_sample), obs_test_stat2), 2), round(permTS2$p.value, 6))
+```
+
+b. Existing Restroom, Unstaffed -> Staffed
+```{r}
+num_perm <- 10000
+X_sample <- dat$count[dat$intervention==1 & dat$intervention.type == "Existing Restroom, Unstaffed -> Staffed"]
+Y_sample <- dat$count[dat$intervention==0 & dat$intervention.type == "Existing Restroom, Unstaffed -> Staffed"]
+n1 <- length(X_sample)
+n2 <- length(Y_sample)
+obs_test_stat3 <- (mean(X_sample)- mean(Y_sample))
+
+perm_test_stats <- lapply(seq_len(num_perm),function(B) {
+  # combine samples and get permutations by shuffling indices
+  combined_observations <-c(X_sample, Y_sample)
+  X_indices <-sample(1:(n1+n2), n1)
+  # create new, permutated data sets
+  permuted_X <- combined_observations[X_indices]
+  permuted_Y <- combined_observations[-X_indices]
+  # calculate the difference in means for this permutation
+  perm_test_stat <-mean(permuted_X)- mean(permuted_Y)
+  return(perm_test_stat)
+  })
+
+perm_test_stats <-do.call(c, perm_test_stats)
+
+# plot results
+p_perm3 <- enframe(perm_test_stats, name = NULL) %>%
+  ggplot(aes(x = value)) + 
+  geom_histogram(fill = "blue", alpha = 0.5) +
+  geom_vline(xintercept = obs_test_stat, colour = "red", linetype = "dashed") +
+  labs(x = "Test statistic", y = "",
+       title = "Permutation Distribution of Test Statistics",
+       subtitle = "(red line indicates the observed test statistic)") +
+  theme_minimal()
+#p_perm3
+
+# estimate p-value
+permTS3 <- permTS(x = X_sample,
+                y = Y_sample,
+                alternative = "two.sided",
+                method = "exact.mc",
+                control = permControl(nmc = num_perm))
+c(round(c(mean(Y_sample), mean(X_sample), obs_test_stat3), 2), round(permTS3$p.value, 4))
+```
+
+c. Existing Staffed Restroom, Daytime Only -> 24/7
+```{r}
+num_perm <- 10000
+X_sample <- dat$count[dat$intervention==1 & dat$intervention.type == "Existing Staffed Restroom, Daytime Only -> 24/7"]
+Y_sample <- dat$count[dat$intervention==0 & dat$intervention.type == "Existing Staffed Restroom, Daytime Only -> 24/7"]
+n1 <- length(X_sample)
+n2 <- length(Y_sample)
+obs_test_stat4 <- (mean(X_sample)- mean(Y_sample))
+
+perm_test_stats <- lapply(seq_len(num_perm),function(B) {
+  # combine samples and get permutations by shuffling indices
+  combined_observations <-c(X_sample, Y_sample)
+  X_indices <-sample(1:(n1+n2), n1)
+  # create new, permutated data sets
+  permuted_X <- combined_observations[X_indices]
+  permuted_Y <- combined_observations[-X_indices]
+  # calculate the difference in means for this permutation
+  perm_test_stat <-mean(permuted_X)- mean(permuted_Y)
+  return(perm_test_stat)
+  })
+
+#perm_test_stats <-do.call(c, perm_test_stats)
+
+# plot results
+p_perm4 <- enframe(perm_test_stats, name = NULL) %>%
+  ggplot(aes(x = value)) + 
+  geom_histogram(fill = "blue", alpha = 0.5) +
+  geom_vline(xintercept = obs_test_stat4, colour = "red", linetype = "dashed") +
+  labs(x = "Test statistic", y = "",
+       title = "Permutation Distribution of Test Statistics",
+       subtitle = "(red line indicates the observed test statistic)") +
+  theme_minimal()
+#p_perm4
+
+# estimate p-value
+permTS4 <- permTS(x = X_sample,
+                y = Y_sample,
+                alternative = "two.sided",
+                method = "exact.mc",
+                control = permControl(nmc = num_perm))
+c(round(c(mean(Y_sample), mean(X_sample), obs_test_stat4), 2), round(permTS4$p.value, 4))
+```
+
+**By neighborhood:**
+a. Castro/Upper Market
+```{r}
+num_perm <- 10000
+X_sample <- dat$count[dat$intervention==1 & dat$neighborhood == "Castro/Upper Market"]
+Y_sample <- dat$count[dat$intervention==0 & dat$neighborhood == "Castro/Upper Market"]
+n1 <- length(X_sample)
+n2 <- length(Y_sample)
+obs_test_stat <- (mean(X_sample)- mean(Y_sample))
+
+perm_test_stats <- lapply(seq_len(num_perm),function(B) {
+  # combine samples and get permutations by shuffling indices
+  combined_observations <-c(X_sample, Y_sample)
+  X_indices <-sample(1:(n1+n2), n1)
+  # create new, permutated data sets
+  permuted_X <- combined_observations[X_indices]
+  permuted_Y <- combined_observations[-X_indices]
+  # calculate the difference in means for this permutation
+  perm_test_stat <-mean(permuted_X)- mean(permuted_Y)
+  return(perm_test_stat)
+  })
+
+perm_test_stats <-do.call(c, perm_test_stats)
+
+# plot results
+p_perm <- enframe(perm_test_stats, name = NULL) %>%
+  ggplot(aes(x = value)) + 
+  geom_histogram(fill = "blue", alpha = 0.5) +
+  geom_vline(xintercept = obs_test_stat, colour = "red", linetype = "dashed") +
+  labs(x = "Test statistic", y = "",
+       title = "Permutation Distribution of Test Statistics",
+       subtitle = "(red line indicates the observed test statistic)") +
+  theme_minimal()
+#p_perm
+
+# estimate p-value
+permTS <- permTS(x = X_sample,
+                y = Y_sample,
+                alternative = "two.sided",
+                method = "exact.mc",
+                control = permControl(nmc = num_perm))
+c(round(c(mean(Y_sample), mean(X_sample), obs_test_stat), 2), round(permTS$p.value, 6))
+```
+
+b. Mission
+```{r}
+num_perm <- 10000
+X_sample <- dat$count[dat$intervention==1 & dat$neighborhood == "Mission"]
+Y_sample <- dat$count[dat$intervention==0 & dat$neighborhood == "Mission"]
+n1 <- length(X_sample)
+n2 <- length(Y_sample)
+obs_test_stat <- (mean(X_sample)- mean(Y_sample))
+
+perm_test_stats <- lapply(seq_len(num_perm),function(B) {
+  # combine samples and get permutations by shuffling indices
+  combined_observations <-c(X_sample, Y_sample)
+  X_indices <-sample(1:(n1+n2), n1)
+  # create new, permutated data sets
+  permuted_X <- combined_observations[X_indices]
+  permuted_Y <- combined_observations[-X_indices]
+  # calculate the difference in means for this permutation
+  perm_test_stat <-mean(permuted_X)- mean(permuted_Y)
+  return(perm_test_stat)
+  })
+
+perm_test_stats <-do.call(c, perm_test_stats)
+
+# plot results
+p_perm <- enframe(perm_test_stats, name = NULL) %>%
+  ggplot(aes(x = value)) + 
+  geom_histogram(fill = "blue", alpha = 0.5) +
+  geom_vline(xintercept = obs_test_stat, colour = "red", linetype = "dashed") +
+  labs(x = "Test statistic", y = "",
+       title = "Permutation Distribution of Test Statistics",
+       subtitle = "(red line indicates the observed test statistic)") +
+  theme_minimal()
+#p_perm
+
+# estimate p-value
+permTS <- permTS(x = X_sample,
+                y = Y_sample,
+                alternative = "two.sided",
+                method = "exact.mc",
+                control = permControl(nmc = num_perm))
+c(round(c(mean(Y_sample), mean(X_sample), obs_test_stat), 2), round(permTS$p.value, 6))
+```
+
+c. SoMa
+```{r}
+num_perm <- 10000
+X_sample <- dat$count[dat$intervention==1 & dat$neighborhood == "SoMa"]
+Y_sample <- dat$count[dat$intervention==0 & dat$neighborhood == "SoMa"]
+n1 <- length(X_sample)
+n2 <- length(Y_sample)
+obs_test_stat <- (mean(X_sample)- mean(Y_sample))
+
+perm_test_stats <- lapply(seq_len(num_perm),function(B) {
+  # combine samples and get permutations by shuffling indices
+  combined_observations <-c(X_sample, Y_sample)
+  X_indices <-sample(1:(n1+n2), n1)
+  # create new, permutated data sets
+  permuted_X <- combined_observations[X_indices]
+  permuted_Y <- combined_observations[-X_indices]
+  # calculate the difference in means for this permutation
+  perm_test_stat <-mean(permuted_X)- mean(permuted_Y)
+  return(perm_test_stat)
+  })
+
+perm_test_stats <-do.call(c, perm_test_stats)
+
+# plot results
+p_perm <- enframe(perm_test_stats, name = NULL) %>%
+  ggplot(aes(x = value)) + 
+  geom_histogram(fill = "blue", alpha = 0.5) +
+  geom_vline(xintercept = obs_test_stat, colour = "red", linetype = "dashed") +
+  labs(x = "Test statistic", y = "",
+       title = "Permutation Distribution of Test Statistics",
+       subtitle = "(red line indicates the observed test statistic)") +
+  theme_minimal()
+#p_perm
+
+# estimate p-value
+permTS <- permTS(x = X_sample,
+                y = Y_sample,
+                alternative = "two.sided",
+                method = "exact.mc",
+                control = permControl(nmc = num_perm))
+c(round(c(mean(Y_sample), mean(X_sample), obs_test_stat), 2), round(permTS$p.value, 6))
+```
+
+d. Tenderloin
+```{r}
+num_perm <- 10000
+X_sample <- dat$count[dat$intervention==1 & dat$neighborhood == "Tenderloin"]
+Y_sample <- dat$count[dat$intervention==0 & dat$neighborhood == "Tenderloin"]
+n1 <- length(X_sample)
+n2 <- length(Y_sample)
+obs_test_stat <- (mean(X_sample)- mean(Y_sample))
+
+perm_test_stats <- lapply(seq_len(num_perm),function(B) {
+  # combine samples and get permutations by shuffling indices
+  combined_observations <-c(X_sample, Y_sample)
+  X_indices <-sample(1:(n1+n2), n1)
+  # create new, permutated data sets
+  permuted_X <- combined_observations[X_indices]
+  permuted_Y <- combined_observations[-X_indices]
+  # calculate the difference in means for this permutation
+  perm_test_stat <-mean(permuted_X)- mean(permuted_Y)
+  return(perm_test_stat)
+  })
+
+perm_test_stats <-do.call(c, perm_test_stats)
+
+# plot results
+p_perm <- enframe(perm_test_stats, name = NULL) %>%
+  ggplot(aes(x = value)) + 
+  geom_histogram(fill = "blue", alpha = 0.5) +
+  geom_vline(xintercept = obs_test_stat, colour = "red", linetype = "dashed") +
+  labs(x = "Test statistic", y = "",
+       title = "Permutation Distribution of Test Statistics",
+       subtitle = "(red line indicates the observed test statistic)") +
+  theme_minimal()
+#p_perm
+
+# estimate p-value
+permTS <- permTS(x = X_sample,
+                y = Y_sample,
+                alternative = "two.sided",
+                method = "exact.mc",
+                control = permControl(nmc = num_perm))
+c(round(c(mean(Y_sample), mean(X_sample), obs_test_stat), 2), round(permTS$p.value, 6))
+```
+
+e. Haight Ashbury
+```{r}
+num_perm <- 10000
+X_sample <- dat$count[dat$intervention==1 & dat$neighborhood == "Haight Ashbury"]
+Y_sample <- dat$count[dat$intervention==0 & dat$neighborhood == "Haight Ashbury"]
+n1 <- length(X_sample)
+n2 <- length(Y_sample)
+obs_test_stat <- (mean(X_sample)- mean(Y_sample))
+
+perm_test_stats <- lapply(seq_len(num_perm),function(B) {
+  # combine samples and get permutations by shuffling indices
+  combined_observations <-c(X_sample, Y_sample)
+  X_indices <-sample(1:(n1+n2), n1)
+  # create new, permutated data sets
+  permuted_X <- combined_observations[X_indices]
+  permuted_Y <- combined_observations[-X_indices]
+  # calculate the difference in means for this permutation
+  perm_test_stat <-mean(permuted_X)- mean(permuted_Y)
+  return(perm_test_stat)
+  })
+
+perm_test_stats <-do.call(c, perm_test_stats)
+
+# plot results
+p_perm <- enframe(perm_test_stats, name = NULL) %>%
+  ggplot(aes(x = value)) + 
+  geom_histogram(fill = "blue", alpha = 0.5) +
+  geom_vline(xintercept = obs_test_stat, colour = "red", linetype = "dashed") +
+  labs(x = "Test statistic", y = "",
+       title = "Permutation Distribution of Test Statistics",
+       subtitle = "(red line indicates the observed test statistic)") +
+  theme_minimal()
+#p_perm
+
+# estimate p-value
+permTS <- permTS(x = X_sample,
+                y = Y_sample,
+                alternative = "two.sided",
+                method = "exact.mc",
+                control = permControl(nmc = num_perm))
+c(round(c(mean(Y_sample), mean(X_sample), obs_test_stat), 2), round(permTS$p.value, 6))
+```
+
+f. Bayview Hunters Point
+```{r}
+num_perm <- 10000
+X_sample <- dat$count[dat$intervention==1 & dat$neighborhood == "Bayview Hunters Point"]
+Y_sample <- dat$count[dat$intervention==0 & dat$neighborhood == "Bayview Hunters Point"]
+n1 <- length(X_sample)
+n2 <- length(Y_sample)
+obs_test_stat <- (mean(X_sample)- mean(Y_sample))
+
+perm_test_stats <- lapply(seq_len(num_perm),function(B) {
+  # combine samples and get permutations by shuffling indices
+  combined_observations <-c(X_sample, Y_sample)
+  X_indices <-sample(1:(n1+n2), n1)
+  # create new, permutated data sets
+  permuted_X <- combined_observations[X_indices]
+  permuted_Y <- combined_observations[-X_indices]
+  # calculate the difference in means for this permutation
+  perm_test_stat <-mean(permuted_X)- mean(permuted_Y)
+  return(perm_test_stat)
+  })
+
+perm_test_stats <-do.call(c, perm_test_stats)
+
+# plot results
+p_perm <- enframe(perm_test_stats, name = NULL) %>%
+  ggplot(aes(x = value)) + 
+  geom_histogram(fill = "blue", alpha = 0.5) +
+  geom_vline(xintercept = obs_test_stat, colour = "red", linetype = "dashed") +
+  labs(x = "Test statistic", y = "",
+       title = "Permutation Distribution of Test Statistics",
+       subtitle = "(red line indicates the observed test statistic)") +
+  theme_minimal()
+#p_perm
+
+# estimate p-value
+permTS <- permTS(x = X_sample,
+                y = Y_sample,
+                alternative = "two.sided",
+                method = "exact.mc",
+                control = permControl(nmc = num_perm))
+c(round(c(mean(Y_sample), mean(X_sample), obs_test_stat), 2), round(permTS$p.value, 6))
+```
+
+g. Golden Gate Park
+```{r}
+num_perm <- 10000
+X_sample <- dat$count[dat$intervention==1 & dat$neighborhood == "Golden Gate Park"]
+Y_sample <- dat$count[dat$intervention==0 & dat$neighborhood == "Golden Gate Park"]
+n1 <- length(X_sample)
+n2 <- length(Y_sample)
+obs_test_stat <- (mean(X_sample)- mean(Y_sample))
+
+perm_test_stats <- lapply(seq_len(num_perm),function(B) {
+  # combine samples and get permutations by shuffling indices
+  combined_observations <-c(X_sample, Y_sample)
+  X_indices <-sample(1:(n1+n2), n1)
+  # create new, permutated data sets
+  permuted_X <- combined_observations[X_indices]
+  permuted_Y <- combined_observations[-X_indices]
+  # calculate the difference in means for this permutation
+  perm_test_stat <-mean(permuted_X)- mean(permuted_Y)
+  return(perm_test_stat)
+  })
+
+perm_test_stats <-do.call(c, perm_test_stats)
+
+# plot results
+p_perm <- enframe(perm_test_stats, name = NULL) %>%
+  ggplot(aes(x = value)) + 
+  geom_histogram(fill = "blue", alpha = 0.5) +
+  geom_vline(xintercept = obs_test_stat, colour = "red", linetype = "dashed") +
+  labs(x = "Test statistic", y = "",
+       title = "Permutation Distribution of Test Statistics",
+       subtitle = "(red line indicates the observed test statistic)") +
+  theme_minimal()
+#p_perm
+
+# estimate p-value
+permTS <- permTS(x = X_sample,
+                y = Y_sample,
+                alternative = "two.sided",
+                method = "exact.mc",
+                control = permControl(nmc = num_perm))
+c(round(c(mean(Y_sample), mean(X_sample), obs_test_stat), 2), round(permTS$p.value, 6))
+```
+
+h. Sunset/Parkside
+```{r}
+num_perm <- 10000
+X_sample <- dat$count[dat$intervention==1 & dat$neighborhood == "Sunset/Parkside"]
+Y_sample <- dat$count[dat$intervention==0 & dat$neighborhood == "Sunset/Parkside"]
+n1 <- length(X_sample)
+n2 <- length(Y_sample)
+obs_test_stat <- (mean(X_sample)- mean(Y_sample))
+
+perm_test_stats <- lapply(seq_len(num_perm),function(B) {
+  # combine samples and get permutations by shuffling indices
+  combined_observations <-c(X_sample, Y_sample)
+  X_indices <-sample(1:(n1+n2), n1)
+  # create new, permutated data sets
+  permuted_X <- combined_observations[X_indices]
+  permuted_Y <- combined_observations[-X_indices]
+  # calculate the difference in means for this permutation
+  perm_test_stat <-mean(permuted_X)- mean(permuted_Y)
+  return(perm_test_stat)
+  })
+
+perm_test_stats <-do.call(c, perm_test_stats)
+
+# plot results
+p_perm <- enframe(perm_test_stats, name = NULL) %>%
+  ggplot(aes(x = value)) + 
+  geom_histogram(fill = "blue", alpha = 0.5) +
+  geom_vline(xintercept = obs_test_stat, colour = "red", linetype = "dashed") +
+  labs(x = "Test statistic", y = "",
+       title = "Permutation Distribution of Test Statistics",
+       subtitle = "(red line indicates the observed test statistic)") +
+  theme_minimal()
+#p_perm
+
+# estimate p-value
+permTS <- permTS(x = X_sample,
+                y = Y_sample,
+                alternative = "two.sided",
+                method = "exact.mc",
+                control = permControl(nmc = num_perm))
+c(round(c(mean(Y_sample), mean(X_sample), obs_test_stat), 2), round(permTS$p.value, 6))
+```
+
+i. North Beach
+```{r}
+num_perm <- 10000
+X_sample <- dat$count[dat$intervention==1 & dat$neighborhood == "North Beach"]
+Y_sample <- dat$count[dat$intervention==0 & dat$neighborhood == "North Beach"]
+n1 <- length(X_sample)
+n2 <- length(Y_sample)
+obs_test_stat <- (mean(X_sample)- mean(Y_sample))
+
+perm_test_stats <- lapply(seq_len(num_perm),function(B) {
+  # combine samples and get permutations by shuffling indices
+  combined_observations <-c(X_sample, Y_sample)
+  X_indices <-sample(1:(n1+n2), n1)
+  # create new, permutated data sets
+  permuted_X <- combined_observations[X_indices]
+  permuted_Y <- combined_observations[-X_indices]
+  # calculate the difference in means for this permutation
+  perm_test_stat <-mean(permuted_X)- mean(permuted_Y)
+  return(perm_test_stat)
+  })
+
+perm_test_stats <-do.call(c, perm_test_stats)
+
+# plot results
+p_perm <- enframe(perm_test_stats, name = NULL) %>%
+  ggplot(aes(x = value)) + 
+  geom_histogram(fill = "blue", alpha = 0.5) +
+  geom_vline(xintercept = obs_test_stat, colour = "red", linetype = "dashed") +
+  labs(x = "Test statistic", y = "",
+       title = "Permutation Distribution of Test Statistics",
+       subtitle = "(red line indicates the observed test statistic)") +
+  theme_minimal()
+#p_perm
+
+# estimate p-value
+permTS <- permTS(x = X_sample,
+                y = Y_sample,
+                alternative = "two.sided",
+                method = "exact.mc",
+                control = permControl(nmc = num_perm))
+c(round(c(mean(Y_sample), mean(X_sample), obs_test_stat), 2), round(permTS$p.value, 6))
+```
+
+j. Financial District/South Beach
+```{r}
+num_perm <- 10000
+X_sample <- dat$count[dat$intervention==1 & dat$neighborhood == "Financial District/South Beach"]
+Y_sample <- dat$count[dat$intervention==0 & dat$neighborhood == "Financial District/South Beach"]
+n1 <- length(X_sample)
+n2 <- length(Y_sample)
+obs_test_stat <- (mean(X_sample)- mean(Y_sample))
+
+perm_test_stats <- lapply(seq_len(num_perm),function(B) {
+  # combine samples and get permutations by shuffling indices
+  combined_observations <-c(X_sample, Y_sample)
+  X_indices <-sample(1:(n1+n2), n1)
+  # create new, permutated data sets
+  permuted_X <- combined_observations[X_indices]
+  permuted_Y <- combined_observations[-X_indices]
+  # calculate the difference in means for this permutation
+  perm_test_stat <-mean(permuted_X)- mean(permuted_Y)
+  return(perm_test_stat)
+  })
+
+perm_test_stats <-do.call(c, perm_test_stats)
+
+# plot results
+p_perm <- enframe(perm_test_stats, name = NULL) %>%
+  ggplot(aes(x = value)) + 
+  geom_histogram(fill = "blue", alpha = 0.5) +
+  geom_vline(xintercept = obs_test_stat, colour = "red", linetype = "dashed") +
+  labs(x = "Test statistic", y = "",
+       title = "Permutation Distribution of Test Statistics",
+       subtitle = "(red line indicates the observed test statistic)") +
+  theme_minimal()
+#p_perm
+
+# estimate p-value
+permTS <- permTS(x = X_sample,
+                y = Y_sample,
+                alternative = "two.sided",
+                method = "exact.mc",
+                control = permControl(nmc = num_perm))
+c(round(c(mean(Y_sample), mean(X_sample), obs_test_stat), 2), round(permTS$p.value, 6))
+```
+
+k. Ocean Beach
+```{r}
+num_perm <- 10000
+X_sample <- dat$count[dat$intervention==1 & dat$neighborhood == "Ocean Beach"]
+Y_sample <- dat$count[dat$intervention==0 & dat$neighborhood == "Ocean Beach"]
+n1 <- length(X_sample)
+n2 <- length(Y_sample)
+obs_test_stat <- (mean(X_sample)- mean(Y_sample))
+
+perm_test_stats <- lapply(seq_len(num_perm),function(B) {
+  # combine samples and get permutations by shuffling indices
+  combined_observations <-c(X_sample, Y_sample)
+  X_indices <-sample(1:(n1+n2), n1)
+  # create new, permutated data sets
+  permuted_X <- combined_observations[X_indices]
+  permuted_Y <- combined_observations[-X_indices]
+  # calculate the difference in means for this permutation
+  perm_test_stat <-mean(permuted_X)- mean(permuted_Y)
+  return(perm_test_stat)
+  })
+
+perm_test_stats <-do.call(c, perm_test_stats)
+
+# plot results
+p_perm <- enframe(perm_test_stats, name = NULL) %>%
+  ggplot(aes(x = value)) + 
+  geom_histogram(fill = "blue", alpha = 0.5) +
+  geom_vline(xintercept = obs_test_stat, colour = "red", linetype = "dashed") +
+  labs(x = "Test statistic", y = "",
+       title = "Permutation Distribution of Test Statistics",
+       subtitle = "(red line indicates the observed test statistic)") +
+  theme_minimal()
+#p_perm
+
+# estimate p-value
+permTS <- permTS(x = X_sample,
+                y = Y_sample,
+                alternative = "two.sided",
+                method = "exact.mc",
+                control = permControl(nmc = num_perm))
+c(round(c(mean(Y_sample), mean(X_sample), obs_test_stat), 2), round(permTS$p.value, 6))
+```
+
+## III. Regression model for ITS
+
+This model is essentially the same as the D-in-D model, but the parameters have changed. We no longer need an offset as long as the number of observations is proportional for each site and time point. (Each site has the same number of observations before and after the intervention, for the same area around the intervention location.) After re-examining our distribution of weekly 311 calls, we can see that our data are overdispersed. Overdispersion can cause problems if you specify a Poisson distribution for your regression model, so instead we need to use a negative binomial distribution. 
+
+Here are the covariates needed for the regression:
+\begin{itemize}
+\item $Time_i$ is the time elapsed since the beginning of the study (e.g., in weeks/months);  
+\item $Intervention_it$ is a dummy variable indicating the pre-intervention period (coded 0) or post-intervention period (coded 1) at time $t$ for each site $i$;     
+\item $Confounder_i$ is an additional covariate measured for each site, included to adjust for confounding (e.g. neighborhood or season); 
+\end{itemize}
+$$ log\big(\mathbb{E}[\mu_i|\mathbf{X}]\big) = \beta_0 + \beta_1*[Time_i] + \beta_2*[Intervention_{it}] + \beta_3*[Time_i*Intervention_{it}] + \beta_4*[Confounder_i] $$
+where:
+\begin{itemize}  
+\item $i$ is the site (i=1:27);
+\item $\mu$ is the mean outcome (number of 311 calls);
+\item $\mathbf{X}$ represents all covariates, described above;
+\item $\beta_0$ is the intercept, or the baseline number of calls at $t=0$;
+\item $\beta_{1}$ is the change in 311 calls per site associated per 1 unit increase in time;
+\item $\beta_{2}$ is the level change following the intervention at each site
+\item $\beta_{3}$ indicates the slope change folowing the intervention (i.e., interaction between time and intervention); and
+\item $\beta_4$ is a coefficient for the confounder included in the model.
+\end{itemize}  
+$\beta_3$ is the coefficient we care about; $exp(\beta_3)$ is a rate ratio (RR), or the rate of 311 calls per week after the intervention divided by the rate of 311 calls per week before the intervention. Observations for the week the interventions began were removed, so the analysis only includes weeks before or after the start of the intervention (i.e. excluded observations during the week the intervention began). **A RR < 1 means the rate of calls per week decreased after the intervention.**  
+
+\newpage
+
+### Stratified analyses for 6 months pre-post intervention:
+\begin{enumerate}
+\item Estimate the overall RR for all sites where a new restroom was installed, stratified by walking buffer distance, adjusting for neighborhood. 
+\item Estimate neighborhood-specific RRs for all sites where a new restroom was installed, using a walking buffer distance of 0.5 km, adjusting for season.  
+\item Estimate intervention-specific RRs for all sites, using a walking buffer distance of 0.5 km, adjusting for neighborhood. 
+\end{enumerate}
+
+```{r its.models1, echo=FALSE}
+### MODEL 1:
+### when intervention type = NEW INSTALLATION
+### stratify by buffer distance to compare
+dat$intervention <- as.numeric(as.character(dat$intervention))
+unique(dat$intervention)
+#unique(dat$intervention.type)
+dat1 <- dat %>% filter(distance.km==0.1)
+dat2 <- dat %>% filter(distance.km==0.322)
+dat3 <- dat %>% filter(distance.km==0.5 ) 
+
+datalist <- list(dat1, dat2, dat3)
+
+# specify model - negative binomial
+library(MASS)
+library(sandwich)
+library(lmtest)
+class(dat3$time)
+its.nb1 <- lapply(datalist, function(x){
+  glm.nb(count ~ time + intervention + time*intervention ,
+        link=log, data=x)
+  }
+)
+# get robust standard errors with sandwich estimator
+its.nb1.robust <- lapply(its.nb1, function(x){
+  coeftest(x, vcov = sandwich)}
+)
+
+its.nb1.robust[[3]]
+```
+
+```{r its.models2, echo=FALSE}
+
+### MODEL 2:
+### when buffer = 0.5 & intervention type = NEW INSTALLATION
+### stratified by neighborhood
+# unique(dat3.1$neighborhood)
+dat3.1 <- filter(dat3, intervention.type=="New Restroom Installed")
+d1 <- filter(dat3.1, neighborhood=="Tenderloin")
+d2 <- filter(dat3.1, neighborhood=="SoMa")
+  #filter(dat3, neighborhood=="Castro"),
+d3 <- filter(dat3.1, neighborhood=="Golden Gate Park")
+  #filter(dat3, neighborhood=="Mid-Market"),
+d4 <- filter(dat3.1, neighborhood=="Haight Ashbury")
+d5 <- filter(dat3.1, neighborhood=="Bayview Hunters Point")
+ # filter(dat3, neighborhood=="Lower Polk"),
+ # filter(dat3, neighborhood== "Outer Sunset"),
+ # filter(dat3, neighborhood=="North Beach"),
+ # filter(dat3, neighborhood=="The Embarcadero"),
+ # d6 <- filter(dat3.1, neighborhood=="Sunset/Parkside")
+d7 <- filter(dat3.1, neighborhood=="Mission")
+
+datalist2 <- list(d1,d2,d3,d4,d5,d7)
+
+its.nb2 <- lapply(datalist2, function(x){
+  glm.nb(count ~ time + intervention + time*intervention,
+        link=log, data=x)
+  }
+)
+# get robust standard errors with sandwich estimator
+its.nb2.robust <- lapply(its.nb2, function(x){
+  coeftest(x, vcov = sandwich)}
+)
+
+# pre-intervention slopes (time) and slope change (time:intervention)
+its.nb2.robust[[1]][,1] #tenderloin
+confint(its.nb2.robust[[1]]) #tenderloin
+
+its.nb2.robust[[2]][,1] #soma
+confint(its.nb2.robust[[2]]) #soma
+
+its.nb2.robust[[3]][,1] #gg park
+confint(its.nb2.robust[[3]]) #gg park
+
+its.nb2.robust[[4]][,1] #haight ashbury
+confint(its.nb2.robust[[4]]) #haight ashbury
+
+its.nb2.robust[[5]][,1] #bayview
+confint(its.nb2.robust[[5]]) #bayview
+
+its.nb2.robust[[6]][,1] #mission
+confint(its.nb2.robust[[6]]) #mission
+
+# level changes using delta method
+# week 28 vs. week 26 comparison (level change)
+library(car)
+p.names <- paste("b",1:3,sep="")
+level.1 <- deltaMethod(its.nb2[[1]],
+                              "b2*1 + b3*28*1",
+                              parameterNames = p.names)
+round(level.1$Estimate + level.1$SE*c(0, -1.96, 1.96), 3)
+
+
+plot(predict(its.nb2[[1]])[1:52],type="l")
+summary(its.nb2[[1]])
+```
+
+```{r its.models4, echo=FALSE}
+### MODEL 3:
+### when buffer = 0.5 & intervention type = provision of attendants
+### stratified by neighborhood
+#unique(dat3$intervention.type)
+dat3.2 <- filter(dat3, intervention.type=="Existing Restroom, Unstaffed -> Staffed")
+d1 <- filter(dat3.2, neighborhood=="Tenderloin")
+d2 <- filter(dat3.2, neighborhood=="SoMa")
+d3 <- filter(dat3.2, neighborhood=="Castro/Upper Market")
+d4 <- filter(dat3.2, neighborhood=="Golden Gate Park")
+#d4 <- filter(dat3.2, neighborhood=="Haight Ashbury")
+#d5 <- filter(dat3.2, neighborhood=="Bayview Hunters Point")
+d5 <- filter(dat3.2, neighborhood== "Sunset/Parkside")
+d6 <- filter(dat3.2, neighborhood=="North Beach")
+d7 <- filter(dat3.2, neighborhood=="Financial District/South Beach")
+d8 <- filter(dat3.2, neighborhood=="Mission")
+
+datalist3 <- list(d1,d2,d3,d4,d5,d6,d7,d8)
+
+its.nb3 <- lapply(datalist3, function(x){
+  glm.nb(count ~ time + intervention + time*intervention ,
+        link=log, data=x)
+  }
+)
+# get robust standard errors with sandwich estimator
+its.nb3.robust <- lapply(its.nb3, function(x){
+  coeftest(x, vcov = sandwich)}
+)
+
+its.nb3.robust[[1]] #tenderloin
+its.nb3.robust[[2]] #soma
+its.nb3.robust[[3]] #castro
+its.nb3.robust[[4]] #gg park
+its.nb3.robust[[5]] #sunset
+its.nb3.robust[[6]] #north beach
+its.nb3.robust[[7]] #financial
+its.nb3.robust[[8]] #mission
+
+confint(its.nb3.robust[[1]]) #tenderloin
+confint(its.nb3.robust[[2]]) #soma
+confint(its.nb3.robust[[3]]) #castro
+confint(its.nb3.robust[[4]]) #gg park
+confint(its.nb3.robust[[5]]) #sunset
+confint(its.nb3.robust[[6]]) #north beach
+confint(its.nb3.robust[[7]]) #financial
+confint(its.nb3.robust[[8]]) #mission
+```
+
+```{r its.models4, echo=FALSE}
+### MODEL 4: 
+### when buffer = 0.5 km
+### separate regression for each intervention type to compare
+dat3 <- dat %>% filter(distance.km == 0.5)
+dat3$intervention.type <- factor(dat3$intervention.type, 
+                                levels = c("New Restroom Installed", 
+                                           "Existing Restroom, Unstaffed -> Staffed",
+                                           "Existing Staffed Restroom, Daytime Only -> 24/7"),
+                                labels = c("Installation of New Restroom",
+                                           "Provision of Attendants",
+                                           "Expansion of Service Hours"))
+
+# STRATIFY by intervention type
+d1 <- filter(dat3, distance.km==0.5 & intervention.type == "Installation of New Restroom")
+d2 <- filter(dat3,  distance.km==0.5 & intervention.type == "Provision of Attendants")
+d3 <- filter(dat3,  distance.km==0.5 & intervention.type == "Expansion of Service Hours")
+datalist4 <- list(d1, d2, d3)
+
+its.nb4 <- lapply(datalist4, function(x){
+  glm.nb(count ~ time + intervention + time*intervention + factor(neighborhood),
+        link=log, data=x)
+  }
+)
+# get robust standard errors with sandwich estimator
+its.nb4.robust <- lapply(its.nb4, function(x){
+  coeftest(x, vcov = sandwich)}
+)
+
+its.nb4.robust[[1]] # installation
+its.nb4.robust[[2]] # attendents
+its.nb4.robust[[3]] #hours w/o adjusting for season
+
+confint(its.nb4.robust[[1]])
+confint(its.nb4.robust[[2]])
+confint(its.nb4.robust[[3]])
+```
+
+**Table 2.** Interrupted time series regression results for 6 months pre-post intervention.  
+```{r its.strat.results2, echo=FALSE}
+rbind( its.nb3.results,its.nb2.results) %>% 
+  mutate(
+    RR = round(exp(as.numeric(Estimate)),3),
+    p.value = round(as.numeric(Pr...z..),4),
+    LL = round(exp(as.numeric(X2.5..)),3),
+    UL = round(exp(as.numeric(X97.5..)),3),
+    CI = paste0("(",LL, ", ", UL, ")")) %>% 
+  dplyr::select(type, n.sites, n.obs, RR, CI, p.value) # %>% 
+  # kable(booktabs=T, 
+  #       col.names = c(" ", "Sites (n)", "Obs. (n)", "RR", "CI", "p-value"), 
+  #       align = "lccc") %>% 
+  # kable_styling(position='left') %>% 
+  # pack_rows("Intervention type (0.5 km buffer)[note]", 1, 3) %>% 
+  # pack_rows("Neighborhood (New Restroom Installed, 0.5 km buffer)[note]", 4, 10) %>% 
+  # add_footnote(
+  #      c("Models adjusted for neighborhood.",
+  #      "Models adjusted for season."),
+  #      notation = "symbol")
+```
+
+**Abbreviations:** Obs.=Weekly Observations, RR=Rate Ratio, CI=95% Confidence Interval.  
+
+\newpage 
+
+**Figure 3.** Linear trends in weekly 311 calls 6 months before and after the installation of a pit-stop restroom by intervention type (A) and by neighborhood for new restroom installations (B) and provision of attendants (C).  
+
+```{r its.plot}
+library(scales)
+library(ggsci)
+dat3$intervention.type[dat3$intervention.type=="New Restroom Installed"] <- "Installation of New Restroom"
+dat3$intervention.type[dat3$intervention.type=="Existing Restroom, Unstaffed -> Staffed"] <- "Provision of Attendants"
+dat3$intervention.type[dat3$intervention.type=="Existing Staffed Restroom, Daytime Only -> 24/7"] <- "Expansion of Service Hours"
+
+p4 <- ggplot(dat3) +
+  geom_point(mapping = aes(x = time, y=count, 
+                         group=intervention.type, color=intervention.type), alpha=0.2) +
+    geom_vline(mapping = aes(xintercept=27), size=1, color="black", linetype="dashed", alpha=0.8) +
+  stat_smooth(mapping = aes(x = time, y=count, group=intervention.type, color=intervention.type),
+              alpha=1, method = "lm", formula = y ~ x*I(x>27), se=FALSE, size=0.6) +
+  scale_colour_manual(values = c("#F39B7FFF", "#8491B4FF", "#4DBBD5FF")) +
+  labs(y = "No. reports of exposed feces", x = "Week", color="") +
+  theme_minimal() +
+  facet_wrap(~intervention.type, nrow=3, scales="free_y") +
+  theme(text = element_text(size=12),
+        axis.title = element_text(size=12)) +
+  scale_y_continuous(#trans="log",
+                     limits=c(0,160)) +
+  scale_x_continuous(breaks = c(10, 20, 30, 40, 50)) +
+  theme(legend.position="none")
+
+p4
+
+p2 <- ggplot(data=filter(dat3, intervention.type=="Installation of New Restroom" &
+           (neighborhood=="Mission" | neighborhood=="SoMa" | neighborhood == "Tenderloin"))) +
+    geom_vline(mapping = aes(xintercept=27), size=1, color="black", linetype="dashed", alpha=0.8) +
+  geom_point(aes(x = time, y=count, group=neighborhood, color=neighborhood), alpha=0.2) +
+  stat_smooth(aes(x = time, y=count, group=neighborhood, color=neighborhood),
+           alpha=1, method = "lm", formula = y ~ x*I(x>27), se=FALSE, size=0.6) +
+  scale_colour_manual(values = c("#7E6148FF", "#00A087FF", "#E64B35FF")) +
+  labs(y = "", x = "Week", color = "") +
+  theme_minimal() +
+  facet_wrap(~neighborhood, nrow=3, scales="free_y") +
+  theme(text = element_text(size=12),
+        axis.title = element_text(size=12)) +
+  scale_x_continuous(breaks = c(10, 20, 30, 40, 50)) +
+  theme(legend.position = "none")
+  
+p2
+
+p5 <- ggplot(data=filter(dat3, intervention.type=="Provision of Attendants" &
+           (neighborhood=="Mission" | neighborhood=="SoMa" | neighborhood == "Tenderloin"))) +
+    geom_vline(mapping = aes(xintercept=27), size=1, color="black", linetype="dashed", alpha=0.8) +
+  geom_point(aes(x = time, y=count, group=neighborhood, color=neighborhood), alpha=0.2) +
+  stat_smooth(aes(x = time, y=count, group=neighborhood, color=neighborhood),
+           alpha=1, method = "lm", formula = y ~ x*I(x>27), se=FALSE, size=0.6) +
+  scale_colour_manual(values = c("#7E6148FF", "#00A087FF", "#E64B35FF")) +
+  labs(y = "", x = "Week", color = "") +
+  theme_minimal() +
+  facet_wrap(~neighborhood, nrow=3, scales="free_y") +
+  theme(text = element_text(size=12),
+        axis.title = element_text(size=12)) +
+  scale_x_continuous(breaks = c(10, 20, 30, 40, 50)) +
+  theme(legend.position = "none")
+
+p5
+
+
+# change legend labels & color palettes
+library(ggpubr)
+ggarrange(p4, p2, p5, nrow = 1, align = "v", vjust = -.2, hjust = -.2, font.label = list(size=14),
+          labels = c("A","B","C","")) +
+  theme(plot.margin = margin(t=0.5,r=0.1,b=0.1,l=0.1, unit= "cm")) 
+
+#ggsave('ITS_facetplot.png', width=7, height=5, units="in")
+```
+
+```{r seasonal.trends}
+# boxplots of reports by season
+dat3 %>% ggplot(aes(x=season, y=count, color=season)) +
+  geom_boxplot(aes(fill=season), alpha=0.4) +
+  theme_minimal() +
+  labs(y="No. exposed feces reports", x="Season") 
+
+# scatterplot of counts over time
+library(lubridate)
+
+labels <- dat3 %>% group_by(year(start.date)) %>% 
+  summarise(Mean=mean(count), SD=sd(count), N=n())
+labels
+
+pdat <- filter(dat3,year(week.start)<2020) %>% 
+  mutate(year=factor(year(week.start), 
+                     labels = c("2014 (Mean=99.5, SD=38.4, N=156)",
+                                "2015 (Mean=29.7, SD=20.1, N=364)",
+                                "2016 (Mean=23.2, SD=17.5, N=416)",
+                                "2017 (Mean=39.4, SD=36.2, N=104)",
+                                "2018 (Mean=16.4, SD=15.5, N=364)",
+                                "2019 (Mean=30.4, SD=27.6, N=208)"
+                     )))
+
+p7 <- pdat %>% ggplot() +
+  geom_vline(aes(xintercept=date(start.date)), 
+             color="black", linetype="dashed", alpha=0.8) +
+  geom_point(aes(x=date(week.start), y=count, color=season), alpha=0.4) +
+  facet_wrap(~year, scales="free_x", ncol=3) +
+  scale_x_date(date_breaks = "3 months",
+               minor_breaks = "1 month",
+               date_labels = "%b") +
+  labs(y = "No. reports of exposed feces", x="Month", color="Season") +
+  theme_minimal() +
+  theme(legend.position = "top") 
+p7
+  
+#ggsave('temporal_trends_facetplot.png', width=7, height=5, units="in")
+
+labels                  
+        
+                  
+```
+
