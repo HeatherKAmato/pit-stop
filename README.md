@@ -1,6 +1,6 @@
 # pit-stop
 This READme file was generated on 2021-09-24 by Heather Amato.
-Description: Data and files for an interrupted time series analysis of reports of exposed feces before and after SF Pit Stop restroom interventions.
+Description: Data and files for an interrupted time series analysis of reports of exposed feces before and after San Francisco Pit Stop restroom interventions.
 
 
 GENERAL INFORMATION
