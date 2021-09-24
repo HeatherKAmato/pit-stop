@@ -57,17 +57,9 @@ DATA & FILE OVERVIEW
 
 METHODOLOGICAL INFORMATION
 
-1. Description of methods used for collection/generation of data: 
-	Data on Pit Stop locations and intervention start dates were provided by the San Francisco Department of Public Works (DPW) upon request. 
-	We downloaded San Francisco 311 reports from a public website: https://datasf.org/opendata/. 
+1. Description of methods used for collection/generation of data: Data on Pit Stop locations and intervention start dates were provided by the San Francisco Department of Public Works (DPW) upon request. We downloaded San Francisco 311 reports from a public website: https://datasf.org/opendata/. 
 
-2. The following methods were used for processing the raw/collected data used for this submitted dataset: 
-	A. Only included Pit Stop interventions implemented between Jan. 1 2014 and Jan. 1 2020.
-	B. Only included 311 reports of type 'Human/Animal Waste', excluded reports with “dup” or “transfer” in the status notes, and only included reports from agencies 
-  that respond to feces reports.
-	C. In ArcGIS Online, we created 500-meter walking distance buffers (polygon derived from all 500m routes following pedestrian paths and roads) around each Pit Stop 
-  location to capture the number of 311 feces reports within the surrounding area of each intervention. Feces reports were then spatially and temporally matched to 
-  each Pit Stop intervention in RStudio.
+2. The following methods were used for processing the raw/collected data used for this submitted dataset: Only included Pit Stop interventions implemented between Jan. 1 2014 and Jan. 1 2020. Only included 311 reports of type 'Human/Animal Waste', excluded reports with “dup” or “transfer” in the status notes, and only included reports from agencies that respond to feces reports. In ArcGIS Online, we created 500-meter walking distance buffers (polygon derived from all 500m routes following pedestrian paths and roads) around each Pit Stop location to capture the number of 311 feces reports within the surrounding area of each intervention. Feces reports were then spatially and temporally matched to each Pit Stop intervention in RStudio.
 
 3. Software-specific information needed to interpret the data: All analyses were conducted using R Studio version 1.3 using the following packages: 
    sf, lubridate, data.table, ggspatial, mapview, ggpubr, ggplot2, Rmisc, perm, MASS, sandwich, lmtest, car, and tidyverse
