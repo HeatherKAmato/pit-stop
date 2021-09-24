@@ -72,21 +72,38 @@ DATA-SPECIFIC INFORMATION FOR: weekly_calls.csv
 2. Number of cases/rows: 4836
 
 3. Variable List: 
+	
 	id - intervention id (31 unique numeric ids)
+	
 	site.id - intervention location id (27 unique numeric site ids)
+	
 	neighborhood - San Francisco DPH Analysis Neighborhoods based on location of Pit Stop intervention
+	
 	pitstop.type - type of Pit Stop restrooms (Portable, JC Decaux, or Rec + Park)
+	
 	intervention.type - type of Pit Stop intervention (New Restroom Installed, Existing Restroom, Unstaffed -> Staffed, or Existing Staffed Restroom, Daytime Only -> 24/7)
+	
 	start.date - start date of Pit Stop intervention
+	
 	week.start - first day of each week including six months before start.date and six months after start.date
+	
 	week.end - last day of each week based on start.date
+	
 	distance.km - walking buffer distance in km (0.1, 0.322, or 0.5)
+	
 	count - number of 311 calls (i.e. feces reports) within the buffer distance (distance.km) that occurred between the week.start and week.end dates
+	
 	site - address of Pit Stop restroom
+	
 	pre.start - first date of six-month pre-intervention period
+	
 	post.start - first date of post-intervention period
+	
 	intervention - whether or not the intervention had been implemented during a given week based on week.start (0=pre-intervention, 1=post-intervention)
+	
 	time - observed week number (1-53) (note: not calendar week number)
+	
 	month - calendar month number based on week.start (1-12)
+	
 
 4. Missing data codes: N/A
