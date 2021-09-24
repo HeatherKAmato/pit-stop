@@ -1,0 +1,32 @@
+pitstop.type,intervention.type,location,site,id,neighborhood,start.date,notes
+Portable,New Restroom Installed,Hyde/ Turk (now Golden Gate/Hyde) (101 Hyde St.),101 Hyde St ,2,Tenderloin,7/15/2014,The original locations of these Pit Stops are different from the location spreadsheet we downloaded from DataSF - you can find the original locations in this news article and use those: https://sanfrancisco.cbslocal.com/2014/07/15/403084-jane-kim-human-waste-mohammed-nuru-homeless-sf-clean-city/
+Portable,New Restroom Installed,Golden Gate/ Jones (now 133 Golden Gate Ave),133 Golden Gate Ave ,1,Tenderloin,7/15/2014,The original locations of these Pit Stops are different from the location spreadsheet we downloaded from DataSF - you can find the original locations in this news article and use those: https://sanfrancisco.cbslocal.com/2014/07/15/403084-jane-kim-human-waste-mohammed-nuru-homeless-sf-clean-city/
+Portable,New Restroom Installed,Taylor/Ellis: (now 388 Ellis St.),388 Ellis St ,3,Tenderloin,7/15/2014,The original locations of these Pit Stops are different from the location spreadsheet we downloaded from DataSF - you can find the original locations in this news article and use those: https://sanfrancisco.cbslocal.com/2014/07/15/403084-jane-kim-human-waste-mohammed-nuru-homeless-sf-clean-city/
+JC Decaux,"Existing Restroom, Unstaffed -> Staffed",Civic Center (Grove/Larkin),Grove and Larkin streets ,8,Tenderloin,"7/1/15, 9/3/15",7/1/15 was the official start date but there were staffing issues until 9/3/15… consider running analysis on both dates?
+JC Decaux,"Existing Restroom, Unstaffed -> Staffed",Hallidie Plaza ,Hallidie Plaza Market St and 5th St ,17,Tenderloin,9/8/2016,
+JC Decaux,"Existing Restroom, Unstaffed -> Staffed",Eddy / Jones,Eddy St. and Jones St. ,20,Tenderloin,8/1/2017,
+JC Decaux,"Existing Restroom, Unstaffed -> Staffed",Larkin / Myrtle,Myrtle and Larkin Streets ,21,Tenderloin,3/5/2018,
+Portable,New Restroom Installed,Eddy/Larkin,Eddy St. and Larkin St. ,27,Tenderloin,11/14/2018,"Out of service from 12/5/18 - 12/14/18, could examine this in analysis"
+JC Decaux,"Existing Staffed Restroom, Daytime Only -> 24/7",Eddy / Jones,Eddy St. and Jones St. ,30,Tenderloin,8/16/2019,Hours extended from daytime only to 24/7
+Rec + Park,"Existing Restroom, Unstaffed -> Staffed",Judah / La Playa,Judah Street and La Playa ,22,Sunset/Parkside,7/1/2018,
+Portable,New Restroom Installed,6th/ Jessie,6th and Jessie streets ,4,SoMa,4/22/2015,
+Portable,New Restroom Installed,100 Valencia St. (McCoppin Hub),McCoppin Hub  McCoppin St and Valencia ,14,Mission,6/15/2016,
+Portable,New Restroom Installed,9th/ Natoma (9th/mission),Natoma and Ninth streets ,15,SoMa,7/1/2016,
+Rec + Park,"Existing Restroom, Unstaffed -> Staffed",Victoria Manolo Draves Park,Victoria Manalo Draves Park Sherman St between Folsom and Harrison streets ,19,SoMa,1/1/2017,
+Portable,"Existing Staffed Restroom, Daytime Only -> 24/7",6th/ Jessie,6th and Jessie streets ,31,SoMa,8/16/2019,Hours extended from daytime only to 24/7
+JC Decaux,"Existing Restroom, Unstaffed -> Staffed",Washington Square Park,Washington Square at Union St ,24,North Beach,7/1/2018,
+JC Decaux,"Existing Restroom, Unstaffed -> Staffed", 24th and Mission ,24th and Mission Streets ,26,Mission ,10/1/2018,
+JC Decaux,"Existing Restroom, Unstaffed -> Staffed",16th St/Mission  (16th St. Mission BART),16th and Mission streets ,7,Mission,6/30/2015,
+Portable,New Restroom Installed,16th/ Capp,16th and Capp streets ,6,Mission,6/30/2015,
+Portable,New Restroom Installed,Mission/ Sycamore (Mission/18th),Mission and Sycamore streets ,11,Mission,2/1/2016,
+JC Decaux,"Existing Restroom, Unstaffed -> Staffed",UN Plaza,U.N. Plaza  Market St and 7th St ,9,Tenderloin,"7/1/15, 9/3/15",7/1/15 was the official start date but there were staffing issues until 9/3/15… consider running analysis on both dates?
+Portable,New Restroom Installed,Buena Vista Park (Haight and Buena Vista),Haight and Buena Vista Ave West ,13,Haight Ashbury,6/15/2016,
+JC Decaux,"Existing Restroom, Unstaffed -> Staffed",Stanyan/ Waller,Stanyan and Waller streets ,10,Golden Gate Park,12/5/2015,
+Portable,New Restroom Installed,Ocean Beach,Ocean Beach ,28,Golden Gate Park,6/10/2019,"Not included in locations spreadsheet from DataSF, need to add manually based on DPW's Pit Stop map: https://www.google.com/maps/d/u/0/viewer?mid=1xRGER_GLPdRdOAT-RPvj1GWUqcw&ll=37.762951519451455%2C-122.4463408&z=12"
+JC Decaux,"Existing Restroom, Unstaffed -> Staffed",Market / Embarcadero / Justin Herman Plaza,Embarcadero Plaza ,25,Financial District/South Beach,7/1/2018,
+Portable,New Restroom Installed,30 Grove St.,30 Grove St. ,18,Tenderloin,9/12/2016,"Only operated from 9/12/2016 - 3/24/17. Locations spreadsheet from DataSF does not have this location, need to add manually based on google maps"
+JC Decaux,"Existing Restroom, Unstaffed -> Staffed",Church/Market #1,Market and Church Streets ,5,Castro/Upper Market,6/12/2015,This location opened from 6/12/15 - 1/31/16 then was shut down until 2018
+JC Decaux,"Existing Restroom, Unstaffed -> Staffed",Castro / Market,Market and Castro streets ,12,Castro/Upper Market,4/6/2016,
+JC Decaux,"Existing Restroom, Unstaffed -> Staffed",Church/Market #2,Market and Church Streets ,23,Castro/Upper Market,7/1/2018,Reopening of this location (previously operated from 6/12/15 - 1/31/16)
+JC Decaux,"Existing Staffed Restroom, Daytime Only -> 24/7",Castro / Market,Market and Castro streets ,29,Castro/Upper Market,8/16/2019,Hours extended from daytime only to 24/7
+Portable,New Restroom Installed,3rd/Palou (Mendell Plaza),Mendell Plaza 3rd St and Mendell St/Palou Ave ,16,Bayview Hunters Point,7/1/2016,
